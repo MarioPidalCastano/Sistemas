@@ -1,4 +1,5 @@
-from flask import Response
+import time
+from flask import Response, g
 from app.metrics import metrics
 from prometheus_client import (
     Counter,
@@ -21,6 +22,19 @@ http_request_duration_seconds = Histogram(
     "amigos_http_request_duration_seconds",
     "Tiempo de respuesta de las peticiones HTTP en segundos"
 )
+
+@metrics.before_app_request
+def before_request():
+    g.start_time = time.perf_counter()
+
+@metrics.after_app_request
+def after_request(response):
+    http_requests_total.inc()
+    if response.status_code >= 400:
+        http_errors_total.inc()
+    duration = time.perf_counter() - g.start_time
+    http_request_duration_seconds.observe(duration)
+    return response
 
 @metrics.route("/metrics")
 def metrics_endpoint():
